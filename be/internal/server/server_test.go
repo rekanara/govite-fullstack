@@ -24,16 +24,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pquerna/otp/totp"
 
-	"govite/internal/app"
-	"govite/internal/auth"
-	"govite/internal/config"
-	"govite/internal/db"
-	"govite/internal/mail"
-	"govite/internal/notify"
+	"govite/internal/kernel"
+	"govite/internal/platform/config"
+	"govite/internal/platform/crypto"
+	"govite/internal/platform/fcm"
+	"govite/internal/platform/mail"
+	"govite/internal/platform/postgres"
+	"govite/internal/platform/postgres/store"
+	"govite/internal/platform/storage"
 	"govite/internal/policy"
 	"govite/internal/server"
-	"govite/internal/storage"
-	"govite/internal/store"
 )
 
 const password = "Password123!"
@@ -44,7 +44,7 @@ type env struct {
 	q    *store.Queries
 	pool *pgxpool.Pool
 	mail *mail.Memory
-	push *notify.Memory
+	push *fcm.Memory
 }
 
 func setup(t *testing.T) *env {
@@ -58,7 +58,7 @@ func setup(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	if err := db.Migrate(ctx, pool, "up"); err != nil {
+	if err := postgres.Migrate(ctx, pool, "up"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `TRUNCATE role, permission, "user", audit_log, app_setting, notification, announcement, webhook_event, api_key, attachment, fcm_device CASCADE`); err != nil {
@@ -66,7 +66,8 @@ func setup(t *testing.T) *env {
 	}
 	m := &mail.Memory{}
 	cfg := config.Config{Env: "test", WebURL: "http://web.test", JWTSecret: strings.Repeat("s", 32), RefreshPepper: strings.Repeat("p", 16), ThrottleLimit: 100000, LoginThrottleLimit: 100000, LogLevel: "silent", MidtransServerKey: "test-server-key"}
-	d := &app.Deps{Cfg: cfg, Pool: pool, Q: store.New(pool), Mail: m}
+	push := &fcm.Memory{}
+	d := server.Deps{Cfg: cfg, Pool: pool, Mail: m, Push: push}
 	if endpoint := os.Getenv("TEST_MINIO_ENDPOINT"); endpoint != "" {
 		d.Files, err = storage.New(storage.Config{Endpoint: endpoint, AccessKey: "minio", SecretKey: "minio12345", Bucket: "app-test", PublicEndpoint: "http://" + endpoint})
 		if err != nil {
@@ -76,19 +77,19 @@ func setup(t *testing.T) *env {
 			t.Fatal(err)
 		}
 	}
-	push := &notify.Memory{}
-	return &env{t, server.New(d, push), d.Q, pool, m, push}
+	f, _ := server.New(d)
+	return &env{t, f, store.New(pool), pool, m, push}
 }
 
 // seedUser creates a role holding perms (scope all) and an active user in it.
 func (e *env) seedUser(email string, perms ...policy.Permission) (userID, roleID string) {
 	ctx := context.Background()
-	roleID, userID = app.NewID(), app.NewID()
+	roleID, userID = kernel.NewID(), kernel.NewID()
 	must(e.t, e.q.CreateRole(ctx, store.CreateRoleParams{ID: roleID, Name: "role-" + email}))
 	for _, p := range perms {
-		must(e.t, e.q.InsertRolePermission(ctx, store.InsertRolePermissionParams{ID: app.NewID(), RoleID: roleID, Resource: p.Resource, Action: p.Action, Scope: "all"}))
+		must(e.t, e.q.InsertRolePermission(ctx, store.InsertRolePermissionParams{ID: kernel.NewID(), RoleID: roleID, Resource: p.Resource, Action: p.Action, Scope: "all"}))
 	}
-	hash, _ := auth.HashPassword(password)
+	hash, _ := crypto.HashPassword(password)
 	name := "Test"
 	must(e.t, e.q.CreateUser(ctx, store.CreateUserParams{ID: userID, Email: email, FullName: &name, RoleID: roleID, PasswordHash: &hash}))
 	return userID, roleID
@@ -586,7 +587,7 @@ func TestMetricsAndCleanup(t *testing.T) {
 		t.Fatalf("metrics: %s", r.Raw)
 	}
 	// Expired/used token rows are removed by the manual cleanup endpoint.
-	_, err := e.pool.Exec(context.Background(), `INSERT INTO user_token(id,user_id,purpose,channel,token_hash,expires_at,used_at) SELECT $1,id,'x','web',$2,now()-interval '100 days',now() FROM "user" LIMIT 1`, app.NewID(), auth.RandomToken(32))
+	_, err := e.pool.Exec(context.Background(), `INSERT INTO user_token(id,user_id,purpose,channel,token_hash,expires_at,used_at) SELECT $1,id,'x','web',$2,now()-interval '100 days',now() FROM "user" LIMIT 1`, kernel.NewID(), crypto.RandomToken(32))
 	must(t, err)
 	r = e.do("POST", "/system/maintenance/cleanup", nil, bearer(admin))
 	expect(t, r, 201)

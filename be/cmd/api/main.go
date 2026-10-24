@@ -19,18 +19,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
-	"govite/internal/app"
-	"govite/internal/auth"
-	"govite/internal/config"
-	"govite/internal/db"
-	"govite/internal/mail"
-	"govite/internal/notify"
+	"govite/internal/kernel"
+	"govite/internal/platform/config"
+	"govite/internal/platform/crypto"
+	"govite/internal/platform/fcm"
+	"govite/internal/platform/mail"
+	postgres "govite/internal/platform/postgres"
+	"govite/internal/platform/postgres/store"
+	"govite/internal/platform/storage"
 	"govite/internal/policy"
 	"govite/internal/server"
-	"govite/internal/settings"
-	"govite/internal/storage"
-	"govite/internal/store"
-	"govite/internal/system"
 )
 
 func main() {
@@ -71,7 +69,7 @@ func run() error {
 		if len(os.Args) > 2 {
 			goose = os.Args[2]
 		}
-		return db.Migrate(ctx, pool, goose, os.Args[min(3, len(os.Args)):]...)
+		return postgres.Migrate(ctx, pool, goose, os.Args[min(3, len(os.Args)):]...)
 	case "seed":
 		return seed(ctx, cfg, store.New(pool))
 	case "serve":
@@ -82,7 +80,7 @@ func run() error {
 }
 
 func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
-	d := &app.Deps{Cfg: cfg, Pool: pool, Q: store.New(pool)}
+	d := server.Deps{Cfg: cfg, Pool: pool}
 	if cfg.RedisURL != "" {
 		opt, err := redis.ParseURL(cfg.RedisURL)
 		if err != nil {
@@ -94,8 +92,7 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 			slog.Warn("redis unreachable at boot; cache and limiter will retry", "err", err)
 		}
 	}
-	brand := (&settings.Service{Deps: d}).Brand
-	d.Mail = mail.NewSMTP(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, brand)
+	d.Mail = mail.NewSMTP(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, server.Brand(server.Settings(pool)))
 	var err error
 	d.Files, err = storage.New(storage.Config{Endpoint: cfg.MinioEndpoint, AccessKey: cfg.MinioAccessKey, SecretKey: cfg.MinioSecretKey, Bucket: cfg.MinioBucket, UseSSL: cfg.MinioUseSSL, PublicEndpoint: cfg.MinioPublicEndpoint, PublicURL: cfg.StoragePublicURL})
 	if err != nil {
@@ -104,18 +101,13 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 	if err := d.Files.EnsureBucket(ctx); err != nil {
 		return err
 	}
-	push, err := notify.NewFCM(ctx, cfg.FirebaseServiceAccountPath)
-	if err != nil {
+	if push, err := fcm.NewFCM(ctx, cfg.FirebaseServiceAccountPath); err != nil {
 		slog.Error("firebase init failed; push disabled", "err", err)
-		push = nil
+	} else if push != nil { // a nil *FCM in the interface would look enabled
+		d.Push = push
 	}
 
-	f := server.New(d, push)
-	sys := &system.Service{Deps: d}
-	sys.RetentionDays = func(ctx context.Context) int {
-		v, _ := (&settings.Service{Deps: d}).Get(ctx)
-		return v.MaintenanceRetentionDays
-	}
+	f, sys := server.New(d)
 	go sys.RunDaily(ctx)
 	errc := make(chan error, 1)
 	go func() { errc <- f.Listen(fmt.Sprintf(":%d", cfg.Port)) }()
@@ -136,7 +128,7 @@ func seed(ctx context.Context, cfg config.Config, q *store.Queries) error {
 	keys := make([]string, len(policy.Permissions))
 	for i, p := range policy.Permissions {
 		keys[i] = p.Key()
-		if err := q.SyncPermission(ctx, store.SyncPermissionParams{ID: app.NewID(), Resource: p.Resource, Action: p.Action}); err != nil {
+		if err := q.SyncPermission(ctx, store.SyncPermissionParams{ID: kernel.NewID(), Resource: p.Resource, Action: p.Action}); err != nil {
 			return err
 		}
 	}
@@ -148,18 +140,18 @@ func seed(ctx context.Context, cfg config.Config, q *store.Queries) error {
 		return err
 	}
 	for _, p := range policy.Permissions {
-		if err := q.UpsertRolePermission(ctx, store.UpsertRolePermissionParams{ID: app.NewID(), RoleID: SuperAdminRoleID, Resource: p.Resource, Action: p.Action, Scope: "all"}); err != nil {
+		if err := q.UpsertRolePermission(ctx, store.UpsertRolePermissionParams{ID: kernel.NewID(), RoleID: SuperAdminRoleID, Resource: p.Resource, Action: p.Action, Scope: "all"}); err != nil {
 			return err
 		}
 	}
 	if cfg.SuperAdminEmail == "" || cfg.SuperAdminPassword == "" {
 		return fmt.Errorf("SUPER_ADMIN_EMAIL and SUPER_ADMIN_PASSWORD are required")
 	}
-	hash, err := auth.HashPassword(cfg.SuperAdminPassword)
+	hash, err := crypto.HashPassword(cfg.SuperAdminPassword)
 	if err != nil {
 		return err
 	}
-	if err := q.UpsertSuperAdmin(ctx, store.UpsertSuperAdminParams{ID: app.NewID(), Email: cfg.SuperAdminEmail, RoleID: SuperAdminRoleID, PasswordHash: &hash}); err != nil {
+	if err := q.UpsertSuperAdmin(ctx, store.UpsertSuperAdminParams{ID: kernel.NewID(), Email: cfg.SuperAdminEmail, RoleID: SuperAdminRoleID, PasswordHash: &hash}); err != nil {
 		return err
 	}
 	slog.Info("seed done", "permissions", len(keys), "superAdmin", cfg.SuperAdminEmail)

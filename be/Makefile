@@ -26,6 +26,6 @@ migrate: ## make migrate CMD="down" for other goose commands
 seed:
 	go run ./cmd/api seed
 
-gen: ## after editing internal/db/queries or internal/policy
+gen: ## after editing internal/platform/postgres/queries or internal/policy
 	sqlc generate
 	go run ./cmd/gen
