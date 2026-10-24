@@ -21,6 +21,7 @@ import (
 	"govite/internal/app"
 	"govite/internal/audit"
 	"govite/internal/auth"
+	"govite/internal/docs"
 	"govite/internal/files"
 	"govite/internal/httpx"
 	"govite/internal/integrations"
@@ -46,6 +47,9 @@ func New(d *app.Deps, push notify.Pusher) *fiber.App {
 		ProxyHeader:           proxyHeader(d.Cfg.TrustProxy),
 	})
 	f.Use(recover.New(), requestID, accessLog(d.Cfg.LogLevel), helmet.New())
+	if !d.Cfg.Production() {
+		docs.Routes(f)
+	}
 	if len(d.Cfg.CORSOrigins) > 0 {
 		f.Use(cors.New(cors.Config{AllowOrigins: strings.Join(d.Cfg.CORSOrigins, ","), AllowCredentials: true, AllowHeaders: "Authorization,Content-Type,X-Client,X-Request-Id"}))
 	}

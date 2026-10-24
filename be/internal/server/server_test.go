@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -592,4 +593,60 @@ func TestMetricsAndCleanup(t *testing.T) {
 	if r.data()["ran"] != true || r.data()["deleted"].(map[string]any)["userTokens"].(float64) < 1 {
 		t.Fatalf("cleanup: %s", r.Raw)
 	}
+}
+
+func TestOpenAPICoversRuntimeRoutes(t *testing.T) {
+	e := setup(t)
+	r := e.doAbsolute("GET", "/api/docs-json", nil)
+	expect(t, r, 200)
+	var spec struct {
+		OpenAPI string                                `json:"openapi"`
+		Paths   map[string]map[string]json.RawMessage `json:"paths"`
+	}
+	if err := json.Unmarshal(r.Raw, &spec); err != nil || spec.OpenAPI != "3.0.0" {
+		t.Fatalf("bad OpenAPI document: %v", err)
+	}
+
+	documented := map[string]bool{}
+	for path, methods := range spec.Paths {
+		for method := range methods {
+			switch method {
+			case "get", "post", "put", "patch", "delete":
+				documented[strings.ToUpper(method)+" "+path] = true
+			}
+		}
+	}
+	for _, methodRoutes := range e.f.Stack() {
+		for _, route := range methodRoutes {
+			if route.Method == "HEAD" || route.Path == "/" || route.Path == "/*" || route.Path == "/api/v1" || strings.HasPrefix(route.Path, "/api/docs") {
+				continue
+			}
+			path := regexp.MustCompile(`:([A-Za-z0-9_]+)`).ReplaceAllString(route.Path, `{$1}`)
+			key := route.Method + " " + path
+			if !documented[key] {
+				t.Errorf("runtime route missing from OpenAPI: %s", key)
+			}
+			delete(documented, key)
+		}
+	}
+	for route := range documented {
+		t.Errorf("OpenAPI route missing at runtime: %s", route)
+	}
+
+	ui := e.doAbsolute("GET", "/api/docs/", nil)
+	for range 5 {
+		if ui.Code != 307 && ui.Code != 308 {
+			break
+		}
+		ui = e.doAbsolute("GET", ui.Header.Get("Location"), nil)
+	}
+	expect(t, ui, 200)
+	if !bytes.Contains(ui.Raw, []byte("Govite Fullstack API")) {
+		t.Fatal("Swagger UI title missing")
+	}
+}
+
+func (e *env) doAbsolute(method, path string, body io.Reader) res {
+	req := httptest.NewRequest(method, path, body)
+	return e.send(req)
 }

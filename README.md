@@ -35,6 +35,7 @@ cd fe && pnpm dev     # admin                 → http://localhost:5173
 
 Vite proxies `/api` to `:3000`, so the browser sees one origin (no CORS, refresh cookie just works).
 Super Admin requires 2FA: the first login shows a QR code.
+Outside production, Swagger UI is at `/api/docs`; raw OpenAPI is at `/api/docs-json` and `/api/docs-yaml`.
 
 ## Verification
 

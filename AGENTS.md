@@ -18,6 +18,7 @@ Go port of `~/Documents/Dev/private/Rekanara/codebase/monorepo-fullstack` (NestJ
 
 - Fiber v2 with `Immutable: true` (fasthttp buffer reuse). Keep it; don't stash `c.Body()`/`c.Params()` slices otherwise.
 - Handlers return errors; `httpx.ErrorHandler` renders the envelope `{data,meta?,error?,status}` with Indonesian `messageInd` (add codes to `httpx/envelope.go`). Domain errors are `httpx.E(status, CODE, message)` package vars.
+- OpenAPI lives in `internal/docs/openapi.json`; Swagger UI `/api/docs` and raw `/api/docs-json|yaml` are disabled in production. `TestOpenAPICoversRuntimeRoutes` fails when runtime methods/paths drift from the spec.
 - Success helpers: `httpx.OK/Created/Page/NoContent/File`. Lists use `httpx.Pagination` + `httpx.NewPageMeta`.
 - Validation: `httpx.Body`/`httpx.Query` with `validate` tags (custom tag `password` reads `policy.Security`).
 - Routes: public on `api`, self-service on `me` (JWT only), everything else on `rbac.Guarded` whose methods take a required `"resource.action"`, so an undeclared route can't compile; unknown permissions panic at boot.
