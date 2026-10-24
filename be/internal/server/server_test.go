@@ -341,20 +341,35 @@ func TestInviteAndPasswordReset(t *testing.T) {
 	expect(t, e.do("POST", "/auth/accept-invite", map[string]string{"token": tok, "fullName": "Neo", "password": password}), 400, "INVALID_TOKEN")
 	e.login("new@test.local")
 
+	n := e.mail.Count()
 	expect(t, e.do("POST", "/auth/forgot-password", map[string]string{"email": "new@test.local"}), 204)
-	msg, _ = e.mail.Last()
+	msg = e.nextMail(n)
 	tok = tokenFrom(t, msg.Text)
 	expect(t, e.do("POST", "/auth/reset-password", map[string]string{"channel": "web", "token": tok, "newPassword": "NewPassword123!"}), 204)
 	expect(t, e.do("POST", "/auth/login", map[string]string{"email": "new@test.local", "password": "NewPassword123!"}), 201)
 
 	// mobile OTP
+	n = e.mail.Count()
 	expect(t, e.do("POST", "/auth/forgot-password", map[string]string{"email": "new@test.local", "channel": "mobile"}), 204)
-	msg, _ = e.mail.Last()
+	msg = e.nextMail(n)
 	if len(msg.Content.Code) != 6 {
 		t.Fatalf("otp mail: %+v", msg)
 	}
 	expect(t, e.do("POST", "/auth/reset-password", map[string]string{"channel": "mobile", "email": "new@test.local", "otp": msg.Content.Code, "newPassword": password}), 204)
 	e.login("new@test.local")
+}
+
+// nextMail waits for a message beyond the first n; reset mail is sent async.
+func (e *env) nextMail(n int) mail.Message {
+	e.t.Helper()
+	for range 100 {
+		if m, ok := e.mail.Last(); ok && e.mail.Count() > n {
+			return m
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	e.t.Fatal("no mail sent")
+	return mail.Message{}
 }
 
 func tokenFrom(t *testing.T, text string) string {

@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"crypto/subtle"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -56,20 +57,34 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email, channel strin
 	if err != nil {
 		return err
 	}
+	var send func(context.Context) error
 	if channel == domain.ChannelMobile {
 		ttl := policy.Security.PasswordResetCodeTTL
 		otp, err := s.issueOTP(ctx, u.ID, domain.PurposePasswordReset, ttl)
 		if err != nil {
 			return err
 		}
-		return s.Mail.PasswordResetCode(ctx, email, otp, ttl)
+		send = func(ctx context.Context) error { return s.Mail.PasswordResetCode(ctx, email, otp, ttl) }
+	} else {
+		ttl := policy.Security.PasswordResetLinkTTL
+		tok, err := s.IssueLink(ctx, u.ID, domain.PurposePasswordReset, ttl)
+		if err != nil {
+			return err
+		}
+		send = func(ctx context.Context) error {
+			return s.Mail.PasswordResetLink(ctx, email, s.webLink("/reset-password", tok), ttl)
+		}
 	}
-	ttl := policy.Security.PasswordResetLinkTTL
-	tok, err := s.IssueLink(ctx, u.ID, domain.PurposePasswordReset, ttl)
-	if err != nil {
-		return err
-	}
-	return s.Mail.PasswordResetLink(ctx, email, s.webLink("/reset-password", tok), ttl)
+	// Send after responding: waiting on SMTP (or failing when it is down) would
+	// let callers tell registered emails apart by latency or status.
+	// ponytail: in-flight mail is lost on shutdown; the user can request again.
+	// Move to a durable queue when mail volume or guarantees grow.
+	go func(ctx context.Context) {
+		if err := send(ctx); err != nil {
+			slog.ErrorContext(ctx, "password reset mail failed", "err", err)
+		}
+	}(context.WithoutCancel(ctx))
+	return nil
 }
 
 // ResetPassword applies a new password from a link token or mobile OTP and

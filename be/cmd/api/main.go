@@ -3,12 +3,14 @@
 //	api                 serve (default)
 //	api migrate [cmd]   goose command, default "up"
 //	api seed            sync permissions, Super Admin role and user
+//	api healthcheck     exit 0 when the local server answers /health/live
 package main
 
 import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -39,6 +41,11 @@ func main() {
 }
 
 func run() error {
+	// healthcheck runs inside the distroless image (no curl/shell), so it must
+	// not need DATABASE_URL or secrets.
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		return healthcheck()
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -53,7 +60,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	pool, err := newPool(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
@@ -77,6 +84,21 @@ func run() error {
 	default:
 		return fmt.Errorf("unknown command %q (serve|migrate|seed)", cmd)
 	}
+}
+
+// newPool caps how long one statement may hold a connection, so a stuck query
+// cannot starve the pool. Override in DATABASE_URL (?statement_timeout=...) if
+// a migration needs longer.
+func newPool(ctx context.Context, url string) (*pgxpool.Pool, error) {
+	pc, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return nil, err
+	}
+	if _, set := pc.ConnConfig.RuntimeParams["statement_timeout"]; !set {
+		pc.ConnConfig.RuntimeParams["statement_timeout"] = "30000"
+	}
+	pc.MaxConnLifetime, pc.HealthCheckPeriod = time.Hour, time.Minute
+	return pgxpool.NewWithConfig(ctx, pc)
 }
 
 func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
@@ -108,7 +130,8 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 	}
 
 	f, sys := server.New(d)
-	go sys.RunDaily(ctx)
+	daily := make(chan struct{})
+	go func() { sys.RunDaily(ctx); close(daily) }()
 	errc := make(chan error, 1)
 	go func() { errc <- f.Listen(fmt.Sprintf(":%d", cfg.Port)) }()
 	slog.Info("api listening", "port", cfg.Port, "env", cfg.Env)
@@ -117,7 +140,15 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 		return err
 	case <-ctx.Done():
 		slog.Info("shutting down")
-		return f.ShutdownWithTimeout(10 * time.Second)
+		err := f.ShutdownWithTimeout(10 * time.Second)
+		// ctx is cancelled, so a running cleanup aborts and its transaction rolls
+		// back; wait for that so the pool is not closed underneath it.
+		select {
+		case <-daily:
+		case <-time.After(10 * time.Second):
+			slog.Warn("maintenance cleanup still running at shutdown")
+		}
+		return err
 	}
 }
 
@@ -155,6 +186,23 @@ func seed(ctx context.Context, cfg config.Config, q *store.Queries) error {
 		return err
 	}
 	slog.Info("seed done", "permissions", len(keys), "superAdmin", cfg.SuperAdminEmail)
+	return nil
+}
+
+func healthcheck() error {
+	port := os.Getenv("APP_PORT")
+	if port == "" {
+		port = "3000"
+	}
+	client := http.Client{Timeout: 3 * time.Second}
+	res, err := client.Get("http://127.0.0.1:" + port + "/api/v1/health/live")
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("health/live: %s", res.Status)
+	}
 	return nil
 }
 

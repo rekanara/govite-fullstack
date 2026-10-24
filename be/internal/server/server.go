@@ -3,16 +3,18 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"regexp"
+	"runtime/debug"
 	"strings"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/helmet"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
-	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
@@ -36,9 +38,13 @@ func New(d Deps) (*fiber.App, *sysapp.Service) {
 		ErrorHandler:          httpx.ErrorHandler,
 		DisableStartupMessage: true,
 		BodyLimit:             12 << 20,
-		ProxyHeader:           proxyHeader(d.Cfg.TrustProxy),
+		// Without these a slow client holds a connection (and goroutine) forever.
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
+		ProxyHeader:  proxyHeader(d.Cfg.TrustProxy),
 	})
-	f.Use(recover.New(), requestID, accessLog(d.Cfg.LogLevel), helmet.New())
+	f.Use(recoverPanic, requestID, accessLog(d.Cfg.LogLevel), helmet.New())
 	if !d.Cfg.Production() {
 		docs.Routes(f)
 	}
@@ -52,6 +58,11 @@ func New(d Deps) (*fiber.App, *sysapp.Service) {
 		Max: d.Cfg.LoginThrottleLimit, Expiration: time.Minute, Storage: store, LimitReached: tooMany,
 		KeyGenerator: func(c *fiber.Ctx) string { return "login:" + c.IP() },
 	})
+	// Refresh is called by every open tab, so it gets its own, looser bucket.
+	refreshLimit := limiter.New(limiter.Config{
+		Max: 6 * d.Cfg.LoginThrottleLimit, Expiration: time.Minute, Storage: store, LimitReached: tooMany,
+		KeyGenerator: func(c *fiber.Ctx) string { return "refresh:" + c.IP() },
+	})
 	webhookLimit := limiter.New(limiter.Config{
 		Max: d.Cfg.WebhookThrottleLimit, Expiration: time.Minute, Storage: store, LimitReached: tooMany,
 		KeyGenerator: func(c *fiber.Ctx) string { return "webhook:" + c.IP() },
@@ -64,7 +75,7 @@ func New(d Deps) (*fiber.App, *sysapp.Service) {
 	h.system.PublicRoutes(api)
 	h.settings.PublicRoutes(api)
 	h.integrations.PublicRoutes(api, webhookLimit)
-	h.auth.Routes(api, loginLimit)
+	h.auth.Routes(api, loginLimit, refreshLimit)
 
 	// Signed in, no permission: self-service.
 	me := api.Group("", h.auth.Authenticate)
@@ -85,6 +96,20 @@ func New(d Deps) (*fiber.App, *sysapp.Service) {
 
 	f.Use(func(*fiber.Ctx) error { return fiber.ErrNotFound })
 	return f, sys
+}
+
+// recoverPanic turns a panic into a 500 envelope, logs the stack as JSON and
+// reports it to Sentry with the stack attached.
+func recoverPanic(c *fiber.Ctx) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			stack := string(debug.Stack())
+			slog.ErrorContext(c.UserContext(), "panic", "value", fmt.Sprint(r), "path", c.Path(), "requestId", c.Locals("requestid"), "stack", stack)
+			sentry.CurrentHub().Recover(r)
+			err = httpx.E(500, "INTERNAL_SERVER_ERROR", "Internal Server Error")
+		}
+	}()
+	return c.Next()
 }
 
 func tooMany(*fiber.Ctx) error {

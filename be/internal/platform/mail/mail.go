@@ -123,3 +123,9 @@ func (m *Memory) Last() (Message, bool) {
 	}
 	return m.Sent[len(m.Sent)-1], true
 }
+
+func (m *Memory) Count() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.Sent)
+}

@@ -1,6 +1,6 @@
 module govite
 
-go 1.26.0
+go 1.26.10
 
 require (
 	github.com/getsentry/sentry-go v0.50.0
@@ -48,8 +48,7 @@ require (
 	github.com/sethvargo/go-retry v0.5.0 // indirect
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/valyala/fasthttp v1.51.0 // indirect
-	github.com/valyala/tcplisten v1.0.0 // indirect
+	github.com/valyala/fasthttp v1.70.0 // indirect
 	github.com/vearutop/statigz v1.4.0 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.uber.org/atomic v1.12.0 // indirect

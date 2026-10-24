@@ -23,6 +23,8 @@ jobs:
           docker run -d --name minio -p 9100:9000 -e MINIO_ROOT_USER=minio -e MINIO_ROOT_PASSWORD=minio12345 quay.io/minio/minio:RELEASE.2025-02-28T09-55-16Z server /data
           for i in $(seq 30); do curl -sf localhost:9100/minio/health/live && exit 0; sleep 1; done; exit 1
       - run: make lint
+      # Fails only on vulnerabilities our code actually calls.
+      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
       - run: make test-e2e
         env: { TEST_MINIO_ENDPOINT: "localhost:9100" }
       - run: make build
@@ -37,4 +39,5 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: pnpm, cache-dependency-path: fe/pnpm-lock.yaml }
       - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --prod
       - run: pnpm lint && pnpm typecheck && pnpm test && pnpm build

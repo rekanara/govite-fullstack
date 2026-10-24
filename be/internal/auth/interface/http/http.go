@@ -163,7 +163,7 @@ func noContent(c *fiber.Ctx, err error) error {
 
 // Routes mounts /auth. loginLimit throttles credential endpoints separately
 // from the global limit, so loosening THROTTLE_LIMIT never loosens login.
-func (h Handler) Routes(r fiber.Router, loginLimit fiber.Handler) {
+func (h Handler) Routes(r fiber.Router, loginLimit, refreshLimit fiber.Handler) {
 	g := r.Group("/auth")
 
 	g.Post("/login", loginLimit, body(func(c *fiber.Ctx, b loginReq) error {
@@ -190,7 +190,7 @@ func (h Handler) Routes(r fiber.Router, loginLimit fiber.Handler) {
 		return deliver(c, sess, nil)
 	}))
 
-	g.Post("/refresh", func(c *fiber.Ctx) error {
+	g.Post("/refresh", refreshLimit, func(c *fiber.Ctx) error {
 		tok := readRefresh(c)
 		if tok == "" {
 			clearRefreshCookie(c)
@@ -212,7 +212,7 @@ func (h Handler) Routes(r fiber.Router, loginLimit fiber.Handler) {
 		return httpx.OK(c, res)
 	})
 
-	g.Post("/logout", func(c *fiber.Ctx) error {
+	g.Post("/logout", refreshLimit, func(c *fiber.Ctx) error {
 		if tok := readRefresh(c); tok != "" {
 			if err := h.Svc.Logout(c.UserContext(), tok); err != nil {
 				return err
