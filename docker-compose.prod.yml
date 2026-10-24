@@ -15,7 +15,7 @@ services:
     image: redis:7-alpine
     healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 10 }
   api:
-    build: be
+    build: { context: be, args: { VERSION: "${VERSION:-}" } }
     env_file: [{ path: be/.env.production, required: false }]
     environment:
       APP_ENV: production

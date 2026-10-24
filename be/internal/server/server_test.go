@@ -607,6 +607,9 @@ func TestOpenAPICoversRuntimeRoutes(t *testing.T) {
 	if err := json.Unmarshal(r.Raw, &spec); err != nil || spec.OpenAPI != "3.0.0" {
 		t.Fatalf("bad OpenAPI document: %v", err)
 	}
+	if y := e.doAbsolute("GET", "/api/docs-yaml", nil); y.Code != 200 || bytes.HasPrefix(y.Raw, []byte("{")) || !strings.Contains(string(y.Raw), "\nopenapi: 3.0.0\n") {
+		t.Fatalf("docs-yaml is not YAML: %.80q", y.Raw)
+	}
 
 	documented := map[string]bool{}
 	for path, methods := range spec.Paths {
