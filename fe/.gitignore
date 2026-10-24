@@ -1,0 +1,8 @@
+node_modules
+dist
+*.local
+.env*
+!.env.example
+*.tsbuildinfo
+.tanstack
+.astro

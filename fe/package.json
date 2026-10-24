@@ -1,0 +1,19 @@
+{
+  "name": "govite-fe",
+  "private": true,
+  "packageManager": "pnpm@10.33.2",
+  "engines": { "node": ">=20.19", "pnpm": ">=9" },
+  "scripts": {
+    "dev": "pnpm --filter admin dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "format": "prettier --write \"apps/*/src/**/*.{ts,tsx}\" \"packages/*/src/**/*.{ts,tsx}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.9.9",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "typescript": "~6.0.2"
+  }
+}

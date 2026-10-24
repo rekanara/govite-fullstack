@@ -1,0 +1,22 @@
+# Local infra only. API (be/) and web (fe/) run on the host.
+# Host ports are offset to avoid clashing with other projects' containers.
+services:
+  postgres:
+    image: postgres:16
+    environment: { POSTGRES_USER: app, POSTGRES_PASSWORD: app, POSTGRES_DB: app }
+    ports: ["5434:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+  postgres_test:
+    image: postgres:16
+    environment: { POSTGRES_USER: app, POSTGRES_PASSWORD: app, POSTGRES_DB: app_test }
+    ports: ["5436:5432"]
+    tmpfs: ["/var/lib/postgresql/data"]
+  redis:
+    image: redis:7
+    ports: ["6380:6379"]
+  mailpit:
+    image: axllent/mailpit
+    ports: ["8025:8025", "1025:1025"]
+
+volumes:
+  postgres_data:
