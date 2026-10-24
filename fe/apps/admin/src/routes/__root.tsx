@@ -7,6 +7,7 @@ import {
 import { Button } from "@app/ui/components/button"
 import { Toaster } from "@app/ui/components/sonner"
 import type { RouterContext } from "@/router-context"
+import { useTheme } from "@/components/theme-provider"
 
 function Fallback({
   title,
@@ -28,13 +29,18 @@ function Fallback({
   )
 }
 
-export const Route = createRootRouteWithContext<RouterContext>()({
-  component: () => (
+function RootLayout() {
+  const { theme } = useTheme()
+  return (
     <>
       <Outlet />
-      <Toaster richColors position="top-right" />
+      <Toaster theme={theme} richColors position="top-right" />
     </>
-  ),
+  )
+}
+
+export const Route = createRootRouteWithContext<RouterContext>()({
+  component: RootLayout,
   notFoundComponent: () => (
     <Fallback
       title="Page not found"

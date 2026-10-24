@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@app/ui/components/table"
 import { PageHeader, RequirePermission } from "@/components/page"
-import { permissionsApi } from "@/features/admin/api"
+import { permissionsApi } from "@/features/roles/api"
 
 export const Route = createFileRoute("/admin/administration/permissions")({
   component: PermissionsPage,

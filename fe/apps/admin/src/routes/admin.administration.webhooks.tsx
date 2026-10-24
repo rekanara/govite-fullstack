@@ -21,7 +21,7 @@ import {
 } from "@app/ui/components/table"
 import { Pagination, TableState } from "@/components/list-controls"
 import { PageHeader, RequirePermission } from "@/components/page"
-import { webhooksApi } from "@/features/admin/api"
+import { webhooksApi } from "@/features/integrations/api"
 
 export const Route = createFileRoute("/admin/administration/webhooks")({
   component: WebhooksPage,

@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@app/ui/components/card"
 import { PageHeader, RequirePermission } from "@/components/page"
-import { systemApi } from "@/features/admin/api"
+import { systemApi } from "@/features/system/api"
 
 export const Route = createFileRoute("/admin/administration/system")({
   component: SystemPage,

@@ -5,7 +5,7 @@ import { Badge } from "@app/ui/components/badge"
 import { Button } from "@app/ui/components/button"
 import { DetailSection } from "@/components/detail-layout"
 import { ListState } from "@/components/list-controls"
-import { auditApi } from "@/features/admin/api"
+import { auditApi } from "@/features/audit/api"
 
 const PAGE_SIZE = 10
 

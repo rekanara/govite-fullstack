@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@app/ui/components/dropdown-menu"
 import { Link } from "@tanstack/react-router"
-import { notificationsApi } from "@/features/admin/api"
+import { notificationsApi } from "@/features/notifications/api"
 
 export function NotificationBell() {
   const queryClient = useQueryClient()

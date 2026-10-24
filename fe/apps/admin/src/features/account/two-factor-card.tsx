@@ -12,9 +12,9 @@ import {
 } from "@app/ui/components/card"
 import { Input } from "@app/ui/components/input"
 import { Label } from "@app/ui/components/label"
-import { accountApi } from "@/features/admin/api"
+import { accountApi } from "@/features/account/api"
 import { ApiError } from "@/lib/api-client"
-import { BackupCodes } from "./backup-codes"
+import { BackupCodes } from "@/features/auth/components/backup-codes"
 
 type Action = "enable" | "regenerate" | "reset" | "disable"
 

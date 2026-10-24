@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from "@app/ui/components/card"
 import { PageHeader } from "@/components/page"
-import { DashboardAnnouncements } from "@/features/admin/dashboard-announcements"
+import { DashboardAnnouncements } from "@/features/announcements/dashboard-announcements"
 import { useAuth } from "@/lib/auth-context"
 
 export const Route = createFileRoute("/admin/dashboard")({

@@ -28,7 +28,7 @@ import {
   useDebounced,
 } from "@/components/list-controls"
 import { PageHeader, RequirePermission } from "@/components/page"
-import { rolesApi } from "@/features/admin/api"
+import { rolesApi } from "@/features/roles/api"
 
 export const Route = createFileRoute("/admin/administration/roles")({
   component: RolesPage,

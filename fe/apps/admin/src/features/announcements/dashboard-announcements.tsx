@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@app/ui/components/card"
 import { ListState } from "@/components/list-controls"
-import { publishedAnnouncementsApi } from "@/features/admin/api"
+import { publishedAnnouncementsApi } from "@/features/announcements/api"
 import { useAuth } from "@/lib/auth-context"
 
 export function DashboardAnnouncements() {

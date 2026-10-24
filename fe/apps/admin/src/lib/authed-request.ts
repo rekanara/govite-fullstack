@@ -71,3 +71,26 @@ export function authedDownload(
 ): Promise<{ blob: Blob; filename: string | null }> {
   return withRefresh((accessToken) => apiBlob(path, accessToken))
 }
+
+/** Query string from params, dropping undefined and empty values. */
+export const qs = (p: Record<string, string | number | boolean | undefined>) =>
+  new URLSearchParams(
+    Object.entries(p).flatMap(([k, v]) =>
+      v === undefined || v === "" ? [] : [[k, String(v)]]
+    )
+  ).toString()
+
+export interface ListParams {
+  page: number
+  limit: number
+  search?: string
+}
+
+export type SortOrder = "asc" | "desc"
+
+/** FormData with a single file field. */
+export function fileForm(file: File, field = "file"): FormData {
+  const body = new FormData()
+  body.append(field, file)
+  return body
+}

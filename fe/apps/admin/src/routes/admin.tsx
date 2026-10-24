@@ -21,8 +21,8 @@ import {
   SidebarTrigger,
 } from "@app/ui/components/sidebar"
 import { TooltipProvider } from "@app/ui/components/tooltip"
-import { AppSidebar } from "@/components/app-sidebar"
-import { NotificationBell } from "@/components/notification-bell"
+import { AppSidebar } from "@/features/shell/app-sidebar"
+import { NotificationBell } from "@/features/shell/notification-bell"
 import { useTheme } from "@/components/theme-provider"
 import { settledStatus } from "@/lib/auth-context"
 

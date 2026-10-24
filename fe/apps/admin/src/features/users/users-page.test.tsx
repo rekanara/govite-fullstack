@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { UsersPage } from "./admin.administration.users"
-import { render } from "../test-utils"
+import { UsersPage } from "./users-page"
+import { render } from "@/test-utils"
 
 const state = vi.hoisted(() => ({ bulk: vi.fn() }))
 
@@ -22,14 +22,13 @@ vi.mock("@/components/page", () => ({
     <>{children}</>
   ),
 }))
-vi.mock("@/features/admin/user-import-dialog", () => ({
+vi.mock("@/features/users/user-import-dialog", () => ({
   UserImportDialog: () => null,
 }))
 vi.mock("@tanstack/react-router", () => ({
-  createFileRoute: () => (cfg: unknown) => cfg,
   Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
 }))
-vi.mock("@/features/admin/api", () => ({
+vi.mock("@/features/users/api", () => ({
   usersApi: {
     list: () =>
       Promise.resolve({
@@ -55,6 +54,8 @@ vi.mock("@/features/admin/api", () => ({
     export: vi.fn(),
     create: vi.fn(),
   },
+}))
+vi.mock("@/features/roles/api", () => ({
   rolesApi: {
     list: () =>
       Promise.resolve({

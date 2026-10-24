@@ -12,8 +12,8 @@ import {
   WebhookIcon,
 } from "lucide-react"
 import type { Resource, Action } from "@app/contracts"
-import { NavMain, type NavItem } from "@/components/nav-main"
-import { NavUser } from "@/components/nav-user"
+import { NavMain, type NavItem } from "@/features/shell/nav-main"
+import { NavUser } from "@/features/shell/nav-user"
 import { useAuth } from "@/lib/auth-context"
 import { usePublicSettings } from "@/lib/public-settings"
 import {

@@ -5,7 +5,7 @@ import { Badge } from "@app/ui/components/badge"
 import { Button } from "@app/ui/components/button"
 import { ListState, Pagination } from "@/components/list-controls"
 import { PageHeader } from "@/components/page"
-import { notificationsApi } from "@/features/admin/api"
+import { notificationsApi } from "@/features/notifications/api"
 
 export const Route = createFileRoute("/admin/notifications")({
   component: NotificationsPage,

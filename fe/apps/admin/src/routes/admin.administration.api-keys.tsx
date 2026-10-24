@@ -25,7 +25,7 @@ import {
 import { ConfirmAction } from "@/components/confirm-action"
 import { TableState } from "@/components/list-controls"
 import { PageHeader, RequirePermission } from "@/components/page"
-import { apiKeysApi } from "@/features/admin/api"
+import { apiKeysApi } from "@/features/integrations/api"
 
 export const Route = createFileRoute("/admin/administration/api-keys")({
   component: ApiKeysPage,

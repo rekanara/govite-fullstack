@@ -22,7 +22,7 @@ import {
   TableRow,
 } from "@app/ui/components/table"
 import { saveDownload } from "@/components/list-controls"
-import { usersApi } from "@/features/admin/api"
+import { usersApi } from "@/features/users/api"
 
 export function UserImportDialog() {
   const queryClient = useQueryClient()
