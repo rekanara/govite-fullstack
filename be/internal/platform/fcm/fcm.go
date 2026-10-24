@@ -32,7 +32,10 @@ type Pusher interface {
 type FCM struct {
 	client  *http.Client
 	project string
+	base    string // API root; tests point it at a fake server
 }
+
+const fcmBase = "https://fcm.googleapis.com"
 
 // NewFCM returns nil when path is empty (push disabled).
 func NewFCM(ctx context.Context, path string) (*FCM, error) {
@@ -54,14 +57,14 @@ func NewFCM(ctx context.Context, path string) (*FCM, error) {
 	if sa.ProjectID == "" {
 		return nil, fmt.Errorf("fcm: project_id missing in service account")
 	}
-	return &FCM{client: oauth2.NewClient(ctx, creds.TokenSource), project: sa.ProjectID}, nil
+	return &FCM{client: oauth2.NewClient(ctx, creds.TokenSource), project: sa.ProjectID, base: fcmBase}, nil
 }
 
 const fcmConcurrency = 16
 
 // Send posts one request per token (v1 has no multicast), 16 at a time.
 func (f *FCM) Send(ctx context.Context, tokens []string, m PushMessage) []string {
-	url := "https://fcm.googleapis.com/v1/projects/" + f.project + "/messages:send"
+	url := f.base + "/v1/projects/" + f.project + "/messages:send"
 	var (
 		mu      sync.Mutex
 		invalid []string
