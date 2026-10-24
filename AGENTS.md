@@ -12,6 +12,7 @@ Go port of `~/Documents/Dev/private/Rekanara/codebase/monorepo-fullstack` (NestJ
 
 - BE (in `be/`): `make lint test`, `make test-e2e` (needs `postgres_test`), `make migrate`, `make seed`, `make gen`, `make dev` (air) / `make run`.
 - FE (in `fe/`): `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; single app `pnpm --filter admin <script>`.
+- Browser e2e: `scripts/e2e.sh` (Playwright in `fe/apps/e2e`; builds the API, seeds `postgres_test`, runs the admin preview). First run: `pnpm --filter e2e exec playwright install chromium`.
 - Smoke: `scripts/smoke.sh` (`API_BASE_URL`, `SUPER_ADMIN_*`; the user must not need 2FA).
 
 ## Backend rules

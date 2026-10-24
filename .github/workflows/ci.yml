@@ -41,3 +41,29 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --prod
       - run: pnpm lint && pnpm typecheck && pnpm test && pnpm build
+
+  e2e:
+    # Browser tests: real API + admin preview in Chromium.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_USER: app, POSTGRES_PASSWORD: app, POSTGRES_DB: app_test }
+        ports: ["5436:5432"]
+        options: --health-cmd "pg_isready -U app" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: be/go.mod, cache-dependency-path: be/go.sum }
+      - uses: pnpm/action-setup@v4
+        with: { package_json_file: fe/package.json }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm, cache-dependency-path: fe/pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+        working-directory: fe
+      - run: pnpm --filter e2e exec playwright install --with-deps chromium
+        working-directory: fe
+      - run: scripts/e2e.sh
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: playwright-traces, path: fe/apps/e2e/test-results, retention-days: 7 }

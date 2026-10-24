@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { ResetPasswordPage } from "./reset-password"
-import { render, submit } from "../test-utils"
-import { ApiError } from "../lib/api-client"
+import { ResetPasswordPage } from "@/routes/reset-password"
+import { render, submit } from "@/test-utils"
+import { ApiError } from "@/lib/api-client"
 
 const state = vi.hoisted(() => ({
   resetPassword: vi.fn(),

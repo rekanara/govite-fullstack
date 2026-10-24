@@ -43,6 +43,7 @@ Outside production, Swagger UI is at `/api/docs`; raw OpenAPI is at `/api/docs-j
 cd be && make lint test
 docker compose up -d postgres_test && make test-e2e
 cd fe && pnpm lint && pnpm typecheck && pnpm test && pnpm build
+scripts/e2e.sh                                                # browser e2e (Playwright), needs postgres_test
 API_BASE_URL=http://localhost:3000/api/v1 scripts/smoke.sh   # SUPER_ADMIN_* must not require 2FA
 ```
 

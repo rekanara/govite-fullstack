@@ -11,13 +11,18 @@ import {
 } from "@app/ui/components/dropdown-menu"
 import { Link } from "@tanstack/react-router"
 import { notificationsApi } from "@/features/notifications/api"
+import { useAuth } from "@/lib/auth-context"
 
 export function NotificationBell() {
   const queryClient = useQueryClient()
+  // The bell lives in the layout, which outlives logout by a render; without
+  // this it polls once more with no token.
+  const signedIn = useAuth().status === "authenticated"
   const notifications = useQuery({
     queryKey: ["notifications", "bell"],
     queryFn: () => notificationsApi.list({ page: 1, limit: 10 }),
     refetchInterval: 60_000,
+    enabled: signedIn,
   })
   const unread = Number(notifications.data?.meta.unreadCount ?? 0)
   const invalidate = () =>

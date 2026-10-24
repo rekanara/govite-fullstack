@@ -6,3 +6,5 @@ dist
 *.tsbuildinfo
 .tanstack
 .astro
+test-results
+playwright-report

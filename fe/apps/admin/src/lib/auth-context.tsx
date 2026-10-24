@@ -124,8 +124,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     await authApi.logout().catch(() => undefined)
     setAccessToken(null)
-    queryClient.clear()
     flushSync(() => setState({ status: "anonymous", user: null }))
+    // Clear only after the state flip has unmounted the admin pages: clearing
+    // under mounted queries makes them refetch with no token (401 + refresh).
+    queryClient.clear()
   }, [])
 
   const refreshUser = useCallback(async () => {
