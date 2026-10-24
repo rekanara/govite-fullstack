@@ -2,12 +2,14 @@ import { Link } from "@tanstack/react-router"
 import {
   KeyRoundIcon,
   LayoutDashboardIcon,
+  MegaphoneIcon,
   ActivityIcon,
   ScrollTextIcon,
   SettingsIcon,
   ShieldIcon,
   UsersIcon,
   TerminalIcon,
+  WebhookIcon,
 } from "lucide-react"
 import type { Resource, Action } from "@app/contracts"
 import { NavMain, type NavItem } from "@/components/nav-main"
@@ -34,14 +36,18 @@ const overview: Guarded[] = [
   },
 ]
 
-// ponytail: Announcements, Webhooks and API keys pages exist but the Go API
-// does not serve them yet (phase 2). Re-add their nav items with the endpoints.
 const administration: Guarded[] = [
   {
     title: "Users",
     url: "/admin/administration/users",
     icon: <UsersIcon />,
     permission: ["users", "manage"],
+  },
+  {
+    title: "Announcements",
+    url: "/admin/administration/announcements",
+    icon: <MegaphoneIcon />,
+    permission: ["announcements", "manage"],
   },
   {
     title: "Roles",
@@ -60,6 +66,18 @@ const administration: Guarded[] = [
     url: "/admin/administration/audit",
     icon: <ScrollTextIcon />,
     permission: ["audit", "view"],
+  },
+  {
+    title: "Webhooks",
+    url: "/admin/administration/webhooks",
+    icon: <WebhookIcon />,
+    permission: ["webhooks", "manage"],
+  },
+  {
+    title: "API keys",
+    url: "/admin/administration/api-keys",
+    icon: <KeyRoundIcon />,
+    permission: ["apiKeys", "manage"],
   },
   {
     title: "Settings",

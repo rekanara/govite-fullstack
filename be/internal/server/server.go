@@ -17,10 +17,14 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"govite/internal/account"
+	"govite/internal/announcements"
 	"govite/internal/app"
 	"govite/internal/audit"
 	"govite/internal/auth"
+	"govite/internal/files"
 	"govite/internal/httpx"
+	"govite/internal/integrations"
+	"govite/internal/notify"
 	"govite/internal/rbac"
 	"govite/internal/roles"
 	"govite/internal/settings"
@@ -31,14 +35,14 @@ import (
 var validRequestID = regexp.MustCompile(`^[\w-]{1,64}$`)
 
 // New builds the HTTP app. Routes live under /api/v1.
-func New(d *app.Deps) *fiber.App {
+func New(d *app.Deps, push notify.Pusher) *fiber.App {
 	f := fiber.New(fiber.Config{
 		// fasthttp reuses request buffers; Immutable makes every string from
 		// c.Params/c.Query/c.Body safe to keep after the handler returns.
 		Immutable:             true,
 		ErrorHandler:          httpx.ErrorHandler,
 		DisableStartupMessage: true,
-		BodyLimit:             4 << 20,
+		BodyLimit:             12 << 20,
 		ProxyHeader:           proxyHeader(d.Cfg.TrustProxy),
 	})
 	f.Use(recover.New(), requestID, accessLog(d.Cfg.LogLevel), helmet.New())
@@ -52,6 +56,10 @@ func New(d *app.Deps) *fiber.App {
 		Max: d.Cfg.LoginThrottleLimit, Expiration: time.Minute, Storage: store, LimitReached: tooMany,
 		KeyGenerator: func(c *fiber.Ctx) string { return "login:" + c.IP() },
 	})
+	webhookLimit := limiter.New(limiter.Config{
+		Max: d.Cfg.WebhookThrottleLimit, Expiration: time.Minute, Storage: store, LimitReached: tooMany,
+		KeyGenerator: func(c *fiber.Ctx) string { return "webhook:" + c.IP() },
+	})
 
 	api := f.Group("/api/v1", globalLimit)
 
@@ -59,7 +67,11 @@ func New(d *app.Deps) *fiber.App {
 	rb := rbac.New(d)
 	auditLog := audit.New(d)
 	settingsSvc := &settings.Service{Deps: d, Audit: auditLog}
-	sys := &system.Service{Deps: d}
+	notifySvc := &notify.Service{Deps: d, Push: push}
+	notifySvc.PushAllowed = func(ctx context.Context) bool { v, _ := settingsSvc.Get(ctx); return v.PushNotificationsEnabled }
+	integrationSvc := &integrations.Service{Deps: d, Audit: auditLog, MidtransServerKey: d.Cfg.MidtransServerKey}
+	sys := &system.Service{Deps: d, PushEnabled: push != nil, PaymentEnabled: integrationSvc.PaymentEnabled()}
+	sys.RetentionDays = func(ctx context.Context) int { v, _ := settingsSvc.Get(ctx); return v.MaintenanceRetentionDays }
 	if d.Mail == nil {
 		panic("server: Deps.Mail is nil")
 	}
@@ -67,12 +79,14 @@ func New(d *app.Deps) *fiber.App {
 	// Public.
 	sys.PublicRoutes(api)
 	settingsSvc.PublicRoutes(api)
+	integrationSvc.PublicRoutes(api, webhookLimit)
 	authSvc.Routes(api, rb, loginLimit)
 
 	// Signed in, no permission: self-service.
 	me := api.Group("", authSvc.Authenticate)
 	(&account.Service{Deps: d, Auth: authSvc, Audit: auditLog}).Routes(me)
-	sys.NotificationRoutes(me)
+	(&files.Service{Deps: d, Audit: auditLog}).Routes(me)
+	notifySvc.Routes(me)
 
 	// Signed in + permission. Guarded routes must name their permission.
 	g := rb.Guard(me)
@@ -80,6 +94,9 @@ func New(d *app.Deps) *fiber.App {
 	(&roles.Service{Deps: d, RBAC: rb, Audit: auditLog}).Routes(g)
 	auditLog.Routes(g)
 	settingsSvc.Routes(g)
+	(&announcements.Service{Deps: d, Notify: notifySvc, Audit: auditLog}).Routes(g)
+	integrationSvc.Routes(g)
+	integrationSvc.APIKeyRoutes(g)
 	sys.Routes(g)
 
 	f.Use(func(*fiber.Ctx) error { return fiber.ErrNotFound })

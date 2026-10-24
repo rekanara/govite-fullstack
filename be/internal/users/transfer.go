@@ -46,7 +46,7 @@ func (s *Service) export(c *fiber.Ctx) error {
 	}
 	table := [][]any{{"email", "fullName", "role", "status", "emailVerifiedAt", "lastLoginAt", "createdAt"}}
 	for _, r := range rows {
-		v := toView(r.User, r.RoleName)
+		v := s.toView(r.User, r.RoleName)
 		status := "inactive"
 		if v.Invited {
 			status = "invited"

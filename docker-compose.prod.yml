@@ -1,0 +1,49 @@
+# Production-like stack: api + web (nginx, proxies /api) + postgres + redis.
+#   DB_PASSWORD=... JWT_ACCESS_SECRET=... REFRESH_TOKEN_PEPPER=... \
+#   SUPER_ADMIN_PASSWORD=... WEB_URL=https://app.example.com docker compose -f docker-compose.prod.yml up --build
+# More settings (SMTP, MinIO, Sentry...) go in be/.env.production (see be/.env.example).
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      POSTGRES_DB: app
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U app"], interval: 5s, timeout: 5s, retries: 10 }
+  redis:
+    image: redis:7-alpine
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 10 }
+  api:
+    build: be
+    env_file: [{ path: be/.env.production, required: false }]
+    environment:
+      APP_ENV: production
+      TRUST_PROXY: "true"
+      WEB_URL: ${WEB_URL:-http://localhost:8080}
+      DATABASE_URL: postgres://app:${DB_PASSWORD}@postgres:5432/app?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET}
+      REFRESH_TOKEN_PEPPER: ${REFRESH_TOKEN_PEPPER:?set REFRESH_TOKEN_PEPPER}
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-admin@example.com}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:?set SUPER_ADMIN_PASSWORD}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+  migrate:
+    build: be
+    command: ["migrate"]
+    environment:
+      DATABASE_URL: postgres://app:${DB_PASSWORD}@postgres:5432/app?sslmode=disable
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      REFRESH_TOKEN_PEPPER: ${REFRESH_TOKEN_PEPPER}
+    depends_on:
+      postgres: { condition: service_healthy }
+    profiles: ["tools"]
+  web:
+    build: { context: fe, dockerfile: apps/admin/Dockerfile }
+    ports: ["8080:80"]
+    depends_on: [api]
+
+volumes:
+  postgres_data:

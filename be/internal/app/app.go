@@ -12,6 +12,7 @@ import (
 
 	"govite/internal/config"
 	"govite/internal/mail"
+	"govite/internal/storage"
 	"govite/internal/store"
 )
 
@@ -21,6 +22,7 @@ type Deps struct {
 	Q     *store.Queries
 	Redis *redis.Client // nil when REDIS_URL is unset
 	Mail  mail.Sender
+	Files *storage.Store // nil when object storage is not configured
 }
 
 // Tx runs fn in one transaction; any error rolls back.

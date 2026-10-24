@@ -65,17 +65,6 @@ func (q *Queries) CountNotifications(ctx context.Context, userID string) (CountN
 	return i, err
 }
 
-const countPublishedAnnouncements = `-- name: CountPublishedAnnouncements :one
-SELECT count(*) FROM announcement WHERE status = 'published'
-`
-
-func (q *Queries) CountPublishedAnnouncements(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countPublishedAnnouncements)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const getSetting = `-- name: GetSetting :one
 SELECT value FROM app_setting WHERE id = $1
 `
@@ -113,38 +102,6 @@ func (q *Queries) InsertAudit(ctx context.Context, arg InsertAuditParams) error 
 		arg.After,
 	)
 	return err
-}
-
-const listAttachments = `-- name: ListAttachments :many
-SELECT id, owner_user_id, key, filename, content_type, size, created_at FROM attachment WHERE owner_user_id = $1 ORDER BY created_at DESC
-`
-
-func (q *Queries) ListAttachments(ctx context.Context, ownerUserID string) ([]Attachment, error) {
-	rows, err := q.db.Query(ctx, listAttachments, ownerUserID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Attachment
-	for rows.Next() {
-		var i Attachment
-		if err := rows.Scan(
-			&i.ID,
-			&i.OwnerUserID,
-			&i.Key,
-			&i.Filename,
-			&i.ContentType,
-			&i.Size,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listAudit = `-- name: ListAudit :many
@@ -250,57 +207,6 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 			&i.DedupeKey,
 			&i.ReadAt,
 			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPublishedAnnouncements = `-- name: ListPublishedAnnouncements :many
-SELECT a.id, a.title, a.content, a.image_url, a.is_pinned, a.status, a.published_at, a.notified_at, a.author_id, a.created_at, a.updated_at, COALESCE(u.full_name, u.email)::text AS author_name
-FROM announcement a JOIN "user" u ON u.id = a.author_id
-WHERE a.status = 'published'
-ORDER BY a.is_pinned DESC, a.published_at DESC NULLS FIRST, a.created_at DESC, a.id DESC
-LIMIT $2 OFFSET $1
-`
-
-type ListPublishedAnnouncementsParams struct {
-	Off int32
-	Lim int32
-}
-
-type ListPublishedAnnouncementsRow struct {
-	Announcement Announcement
-	AuthorName   string
-}
-
-func (q *Queries) ListPublishedAnnouncements(ctx context.Context, arg ListPublishedAnnouncementsParams) ([]ListPublishedAnnouncementsRow, error) {
-	rows, err := q.db.Query(ctx, listPublishedAnnouncements, arg.Off, arg.Lim)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListPublishedAnnouncementsRow
-	for rows.Next() {
-		var i ListPublishedAnnouncementsRow
-		if err := rows.Scan(
-			&i.Announcement.ID,
-			&i.Announcement.Title,
-			&i.Announcement.Content,
-			&i.Announcement.ImageUrl,
-			&i.Announcement.IsPinned,
-			&i.Announcement.Status,
-			&i.Announcement.PublishedAt,
-			&i.Announcement.NotifiedAt,
-			&i.Announcement.AuthorID,
-			&i.Announcement.CreatedAt,
-			&i.Announcement.UpdatedAt,
-			&i.AuthorName,
 		); err != nil {
 			return nil, err
 		}

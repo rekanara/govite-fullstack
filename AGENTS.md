@@ -4,9 +4,9 @@ Go port of `~/Documents/Dev/private/Rekanara/codebase/monorepo-fullstack` (NestJ
 
 ## Layout
 
-- `be/`: one Go module (`govite`). `cmd/api` = server + `migrate` + `seed` subcommands; `cmd/gen` = policy to TS. Feature packages in `internal/<feature>` (`auth`, `account`, `users`, `roles`, `audit`, `settings`, `system`), shared bits in `internal/{app,httpx,rbac,mail,xport,policy,config,db,store}`.
+- `be/`: one Go module (`govite`). `cmd/api` = server + `migrate` + `seed` subcommands; `cmd/gen` = policy to TS. Feature packages in `internal/<feature>` (`auth`, `account`, `users`, `roles`, `audit`, `settings`, `system`, `announcements`, `notify`, `files`, `integrations`), shared bits in `internal/{app,httpx,rbac,mail,xport,policy,config,db,store}`.
 - `fe/`: pnpm workspace, no Turbo. `apps/admin` (package `admin`), `packages/ui` (`@app/ui`), `packages/contracts` (`@app/contracts`, consumed from `src`, no build).
-- `docker-compose.yml` at root: infra only (postgres 5434, postgres_test 5436, redis 6380, mailpit 1025/8025).
+- `docker-compose.yml` at root: infra only (postgres 5434, postgres_test 5436, redis 6380, mailpit 1025/8025, MinIO 9100/9101).
 
 ## Commands
 

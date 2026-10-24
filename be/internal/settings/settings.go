@@ -15,6 +15,7 @@ import (
 	"govite/internal/httpx"
 	"govite/internal/mail"
 	"govite/internal/rbac"
+	"govite/internal/storage"
 	"govite/internal/store"
 )
 
@@ -130,16 +131,26 @@ func (s *Service) Routes(g rbac.Guarded) {
 		if err := httpx.Check(&v); err != nil {
 			return err
 		}
+		previous, _ := s.Get(c.UserContext())
 		raw, _ := json.Marshal(v)
 		if err := s.Q.PutSetting(c.UserContext(), store.PutSettingParams{ID: rowID, Value: raw}); err != nil {
 			return err
 		}
-		s.Audit.From(c, "settings.update", "settings", rowID, nil, v)
+		if previous.LogoURL != nil && (v.LogoURL == nil || *previous.LogoURL != *v.LogoURL) {
+			s.Files.RemoveOwned(c.UserContext(), *previous.LogoURL, "branding")
+		}
+		if previous.BannerURL != nil && (v.BannerURL == nil || *previous.BannerURL != *v.BannerURL) {
+			s.Files.RemoveOwned(c.UserContext(), *previous.BannerURL, "branding")
+		}
+		s.Audit.From(c, "settings.update", "settings", rowID, previous, v)
 		return httpx.OK(c, v)
 	})
 
-	// ponytail: object storage is phase 2; image upload answers 503 until then.
-	g.Post("/settings/image", "settings.manage", func(*fiber.Ctx) error {
-		return httpx.E(503, "STORAGE_UNAVAILABLE", "Object storage is not configured")
+	g.Post("/settings/image", "settings.manage", func(c *fiber.Ctx) error {
+		_, url, err := s.Files.UploadImage(c, "image", "branding", "", storage.MaxImageBytes)
+		if err != nil {
+			return err
+		}
+		return httpx.Created(c, fiber.Map{"url": url})
 	})
 }

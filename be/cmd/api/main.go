@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
@@ -23,10 +24,13 @@ import (
 	"govite/internal/config"
 	"govite/internal/db"
 	"govite/internal/mail"
+	"govite/internal/notify"
 	"govite/internal/policy"
 	"govite/internal/server"
 	"govite/internal/settings"
+	"govite/internal/storage"
 	"govite/internal/store"
+	"govite/internal/system"
 )
 
 func main() {
@@ -42,6 +46,12 @@ func run() error {
 		return err
 	}
 	setupLogger(cfg.LogLevel)
+	if cfg.SentryDSN != "" {
+		if err := sentry.Init(sentry.ClientOptions{Dsn: cfg.SentryDSN, Environment: cfg.SentryEnvironment, EnableTracing: true}); err != nil {
+			return err
+		}
+		defer sentry.Flush(2 * time.Second)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -86,8 +96,27 @@ func serve(ctx context.Context, cfg config.Config, pool *pgxpool.Pool) error {
 	}
 	brand := (&settings.Service{Deps: d}).Brand
 	d.Mail = mail.NewSMTP(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, brand)
+	var err error
+	d.Files, err = storage.New(storage.Config{Endpoint: cfg.MinioEndpoint, AccessKey: cfg.MinioAccessKey, SecretKey: cfg.MinioSecretKey, Bucket: cfg.MinioBucket, UseSSL: cfg.MinioUseSSL, PublicEndpoint: cfg.MinioPublicEndpoint, PublicURL: cfg.StoragePublicURL})
+	if err != nil {
+		return err
+	}
+	if err := d.Files.EnsureBucket(ctx); err != nil {
+		return err
+	}
+	push, err := notify.NewFCM(ctx, cfg.FirebaseServiceAccountPath)
+	if err != nil {
+		slog.Error("firebase init failed; push disabled", "err", err)
+		push = nil
+	}
 
-	f := server.New(d)
+	f := server.New(d, push)
+	sys := &system.Service{Deps: d}
+	sys.RetentionDays = func(ctx context.Context) int {
+		v, _ := (&settings.Service{Deps: d}).Get(ctx)
+		return v.MaintenanceRetentionDays
+	}
+	go sys.RunDaily(ctx)
 	errc := make(chan error, 1)
 	go func() { errc <- f.Listen(fmt.Sprintf(":%d", cfg.Port)) }()
 	slog.Info("api listening", "port", cfg.Port, "env", cfg.Env)

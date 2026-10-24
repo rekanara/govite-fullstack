@@ -53,8 +53,14 @@ type View struct {
 	CreatedAt       time.Time  `json:"createdAt"`
 }
 
-func toView(u store.User, roleName string) View {
-	return View{u.ID, u.Email, u.FullName, nil, u.RoleID, roleName, u.IsActive, u.PasswordHash == nil, u.EmailVerifiedAt, u.DeletedAt, u.LastLoginAt, u.CreatedAt}
+func (s *Service) toView(u store.User, roleName string) View {
+	var avatar *string
+	if u.AvatarKey != nil && s.Files.Enabled() {
+		if v := s.Files.URL(*u.AvatarKey); v != "" {
+			avatar = &v
+		}
+	}
+	return View{u.ID, u.Email, u.FullName, avatar, u.RoleID, roleName, u.IsActive, u.PasswordHash == nil, u.EmailVerifiedAt, u.DeletedAt, u.LastLoginAt, u.CreatedAt}
 }
 
 func (s *Service) Get(ctx context.Context, id string) (View, error) {
@@ -62,7 +68,7 @@ func (s *Service) Get(ctx context.Context, id string) (View, error) {
 	if err != nil {
 		return View{}, ErrNotFound
 	}
-	return toView(row.User, row.RoleName), nil
+	return s.toView(row.User, row.RoleName), nil
 }
 
 type CreateInput struct {
@@ -244,7 +250,7 @@ func (s *Service) Routes(g rbac.Guarded) {
 		}
 		out := make([]View, len(rows))
 		for i, r := range rows {
-			out[i] = toView(r.User, r.RoleName)
+			out[i] = s.toView(r.User, r.RoleName)
 		}
 		return httpx.Page(c, out, httpx.NewPageMeta(total, q.Page, q.Limit))
 	})

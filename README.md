@@ -12,14 +12,16 @@ fe/   pnpm workspace: apps/admin (Vite SPA), packages/ui (shadcn), packages/cont
 - Auth: JWT access token + rotating refresh cookie (reuse revokes the session), forgot/reset password (web link or mobile OTP), invites, email verification, session list/revoke, mobile clients via `X-Client: mobile`.
 - RBAC: roles, permission catalog, `self|team|all` scopes, role-required TOTP 2FA with backup codes.
 - Users: list/sort/filter, bulk actions, soft delete/restore, CSV/XLSX export, CSV import with preview.
-- Audit log with filters and CSV export. App settings and public branding. Health and system status.
-
-Not ported yet (phase 2): announcements management, push notifications, webhooks, API keys, file uploads (MinIO), maintenance job, metrics, Sentry. Their admin pages exist but are hidden from the sidebar.
+- Audit log with filters and CSV export. App settings and public branding. Health, Prometheus-style metrics and system status.
+- Notifications: in-app + optional FCM push, device registration and push opt-outs.
+- Announcements: drafts, pinning, image upload and one-time notification on publish.
+- Optional MinIO/S3-compatible storage: avatars, branding, announcement images, private signed attachments.
+- Verified, idempotent Midtrans webhooks; API key management; daily cleanup with a Postgres advisory lock; optional Sentry.
 
 ## Setup
 
 ```bash
-docker compose up -d postgres redis mailpit     # postgres :5434, redis :6380, mailpit :8025
+docker compose up -d postgres redis mailpit minio     # postgres :5434, redis :6380, mailpit :8025, MinIO console :9101
 cd be && cp .env.example .env && make migrate seed
 cd fe && pnpm install && cp apps/admin/.env.example apps/admin/.env
 ```
@@ -59,3 +61,4 @@ Add `"@app/ui": "workspace:*"` (and `@astrojs/react` for React islands), import 
 - Behind a reverse proxy set `TRUST_PROXY=true` so rate limits see the client IP.
 - Set `REDIS_URL` when running more than one API instance (shared rate limits, permission cache).
 - Run `api migrate` before serving traffic; `api seed` after changing the permission catalog.
+- Optional production stack: `docker-compose.prod.yml` serves the SPA and proxies `/api` to the API.

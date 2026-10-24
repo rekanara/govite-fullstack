@@ -14,8 +14,6 @@ import (
 	"govite/internal/store"
 )
 
-var ErrStorage = httpx.E(503, "STORAGE_UNAVAILABLE", "Object storage is not configured")
-
 type Service struct {
 	*app.Deps
 	Auth  *auth.Service
@@ -69,9 +67,6 @@ func (s *Service) Routes(r fiber.Router) {
 		s.Audit.From(c, "account.profile.update", "user", id, nil, res)
 		return httpx.OK(c, res)
 	})
-
-	// ponytail: object storage is phase 2; avatar upload answers 503 until then.
-	g.Post("/avatar", func(*fiber.Ctx) error { return ErrStorage })
 
 	g.Post("/password", func(c *fiber.Ctx) error {
 		var b struct {
@@ -231,9 +226,6 @@ func (s *Service) Routes(r fiber.Router) {
 		return httpx.NoContent(c)
 	})
 
-	// ponytail: attachments are phase 2 (object storage); list stays empty.
-	r.Get("/attachments", func(c *fiber.Ctx) error { return httpx.OK(c, []any{}) })
-	r.Post("/attachments", func(*fiber.Ctx) error { return ErrStorage })
 }
 
 // resetTwoFactor wipes the secret and codes and signs out other sessions.

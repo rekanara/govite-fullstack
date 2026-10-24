@@ -17,6 +17,13 @@ services:
   mailpit:
     image: axllent/mailpit
     ports: ["8025:8025", "1025:1025"]
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-02-28T09-55-16Z
+    command: server /data --console-address ":9001"
+    environment: { MINIO_ROOT_USER: minio, MINIO_ROOT_PASSWORD: minio12345 }
+    ports: ["9100:9000", "9101:9001"]
+    volumes: ["minio_data:/data"]
 
 volumes:
   postgres_data:
+  minio_data:

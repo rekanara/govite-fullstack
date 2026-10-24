@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -68,6 +69,7 @@ func ErrorHandler(c *fiber.Ctx, err error) error {
 	case errors.As(err, &pg) && pg.Code == "23503":
 		de = E(409, "CONFLICT", "Referenced record is in use or missing")
 	default:
+		sentry.CaptureException(err)
 		slog.ErrorContext(c.UserContext(), "unhandled error", "err", err, "path", c.Path(), "requestId", c.Locals("requestid"))
 		de = E(500, "INTERNAL_SERVER_ERROR", "Internal Server Error")
 	}

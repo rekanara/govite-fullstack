@@ -259,9 +259,15 @@ func (s *Service) Routes(r fiber.Router, rb *rbac.RBAC, loginLimit fiber.Handler
 		if err != nil {
 			return err
 		}
+		var avatar any
+		if u.User.AvatarKey != nil && s.Files.Enabled() {
+			if v := s.Files.URL(*u.User.AvatarKey); v != "" {
+				avatar = v
+			}
+		}
 		return httpx.OK(c, fiber.Map{
 			"id": u.User.ID, "email": u.User.Email, "fullName": u.User.FullName,
-			"avatarUrl": nil, "roleId": u.User.RoleID, "roleName": u.RoleName,
+			"avatarUrl": avatar, "roleId": u.User.RoleID, "roleName": u.RoleName,
 			"emailVerified": u.User.EmailVerifiedAt != nil, "permissions": grants,
 		})
 	})

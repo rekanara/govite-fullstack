@@ -6,8 +6,11 @@ package server_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha512"
+	"encoding/hex"
 	"encoding/json"
 	"io"
+	"maps"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -25,8 +28,10 @@ import (
 	"govite/internal/config"
 	"govite/internal/db"
 	"govite/internal/mail"
+	"govite/internal/notify"
 	"govite/internal/policy"
 	"govite/internal/server"
+	"govite/internal/storage"
 	"govite/internal/store"
 )
 
@@ -38,6 +43,7 @@ type env struct {
 	q    *store.Queries
 	pool *pgxpool.Pool
 	mail *mail.Memory
+	push *notify.Memory
 }
 
 func setup(t *testing.T) *env {
@@ -54,13 +60,23 @@ func setup(t *testing.T) *env {
 	if err := db.Migrate(ctx, pool, "up"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `TRUNCATE role, permission, "user", audit_log, app_setting, notification, announcement CASCADE`); err != nil {
+	if _, err := pool.Exec(ctx, `TRUNCATE role, permission, "user", audit_log, app_setting, notification, announcement, webhook_event, api_key, attachment, fcm_device CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 	m := &mail.Memory{}
-	cfg := config.Config{Env: "test", WebURL: "http://web.test", JWTSecret: strings.Repeat("s", 32), RefreshPepper: strings.Repeat("p", 16), ThrottleLimit: 100000, LoginThrottleLimit: 100000, LogLevel: "silent"}
+	cfg := config.Config{Env: "test", WebURL: "http://web.test", JWTSecret: strings.Repeat("s", 32), RefreshPepper: strings.Repeat("p", 16), ThrottleLimit: 100000, LoginThrottleLimit: 100000, LogLevel: "silent", MidtransServerKey: "test-server-key"}
 	d := &app.Deps{Cfg: cfg, Pool: pool, Q: store.New(pool), Mail: m}
-	return &env{t, server.New(d), d.Q, pool, m}
+	if endpoint := os.Getenv("TEST_MINIO_ENDPOINT"); endpoint != "" {
+		d.Files, err = storage.New(storage.Config{Endpoint: endpoint, AccessKey: "minio", SecretKey: "minio12345", Bucket: "app-test", PublicEndpoint: "http://" + endpoint})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := d.Files.EnsureBucket(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	push := &notify.Memory{}
+	return &env{t, server.New(d, push), d.Q, pool, m, push}
 }
 
 // seedUser creates a role holding perms (scope all) and an active user in it.
@@ -448,4 +464,132 @@ func TestSettingsAndRoles(t *testing.T) {
 	expect(t, e.do("PUT", "/roles/"+id+"/permissions", map[string]any{"permissions": []map[string]string{{"resource": "audit", "action": "nope", "scope": "all"}}}, bearer(admin)), 400, "VALIDATION_ERROR")
 	expect(t, e.do("DELETE", "/roles/"+id, nil, bearer(admin)), 200)
 	expect(t, e.do("GET", "/permissions", nil, bearer(admin)), 200)
+}
+
+func TestAnnouncementsNotificationsAndAPIKeys(t *testing.T) {
+	e := setup(t)
+	e.seedUser("admin@test.local", all...)
+	e.seedUser("reader@test.local", policy.Permission{Resource: "announcements", Action: "view"})
+	admin, _ := e.login("admin@test.local")
+	reader, _ := e.login("reader@test.local")
+
+	// Draft is visible to managers but hidden from readers.
+	r := e.do("POST", "/announcements", map[string]any{"title": "Draft", "content": "Not yet", "status": "draft"}, bearer(admin))
+	expect(t, r, 201)
+	draftID := r.data()["id"].(string)
+	expect(t, e.do("GET", "/announcements/"+draftID, nil, bearer(reader)), 404, "ANNOUNCEMENT_NOT_FOUND")
+	expect(t, e.do("GET", "/announcements/manage/"+draftID, nil, bearer(admin)), 200)
+
+	// Publishing writes one notification for every active user, once.
+	r = e.do("PATCH", "/announcements/"+draftID, map[string]string{"status": "published"}, bearer(admin))
+	expect(t, r, 200)
+	expect(t, e.do("PATCH", "/announcements/"+draftID, map[string]string{"title": "Edited"}, bearer(admin)), 200)
+	inbox := e.do("GET", "/notifications", nil, bearer(reader))
+	expect(t, inbox, 200)
+	if len(inbox.Body["data"].([]any)) != 1 || inbox.Body["meta"].(map[string]any)["unreadCount"].(float64) != 1 {
+		t.Fatalf("inbox: %s", inbox.Raw)
+	}
+	id := inbox.Body["data"].([]any)[0].(map[string]any)["id"].(string)
+	expect(t, e.do("POST", "/notifications/"+id+"/read", nil, bearer(reader)), 201)
+	expect(t, e.do("POST", "/notifications/read-all", nil, bearer(reader)), 204)
+
+	// API key plaintext is shown once; list only carries its prefix/hash metadata.
+	r = e.do("POST", "/api-keys", map[string]string{"name": "CI"}, bearer(admin))
+	expect(t, r, 201)
+	keyID, plain := r.data()["id"].(string), r.data()["key"].(string)
+	if !strings.HasPrefix(plain, "rk_") || len(plain) < 40 {
+		t.Fatalf("api key: %s", r.Raw)
+	}
+	r = e.do("GET", "/api-keys", nil, bearer(admin))
+	expect(t, r, 200)
+	if strings.Contains(string(r.Raw), plain) {
+		t.Fatal("plaintext API key leaked in list")
+	}
+	expect(t, e.do("PATCH", "/api-keys/"+keyID, map[string]bool{"isActive": false}, bearer(admin)), 200)
+	expect(t, e.do("DELETE", "/api-keys/"+keyID, nil, bearer(admin)), 204)
+}
+
+func TestMidtransWebhook(t *testing.T) {
+	e := setup(t)
+	e.seedUser("admin@test.local", all...)
+	admin, _ := e.login("admin@test.local")
+	p := map[string]string{"order_id": "o1", "status_code": "200", "gross_amount": "10000.00", "transaction_status": "settlement", "transaction_id": "t1"}
+	sum := sha512.Sum512([]byte(p["order_id"] + p["status_code"] + p["gross_amount"] + "test-server-key"))
+	p["signature_key"] = hex.EncodeToString(sum[:])
+
+	r := e.do("POST", "/webhooks/midtrans", p)
+	expect(t, r, 200)
+	if r.data()["duplicate"] != false {
+		t.Fatalf("first: %s", r.Raw)
+	}
+	r = e.do("POST", "/webhooks/midtrans", p)
+	expect(t, r, 200)
+	if r.data()["duplicate"] != true {
+		t.Fatalf("duplicate: %s", r.Raw)
+	}
+	bad := maps.Clone(p)
+	bad["signature_key"] = strings.Repeat("a", 128)
+	expect(t, e.do("POST", "/webhooks/midtrans", bad), 401, "INVALID_WEBHOOK_SIGNATURE")
+	r = e.do("GET", "/webhooks/events", nil, bearer(admin))
+	expect(t, r, 200)
+	if len(r.Body["data"].([]any)) != 1 || r.Body["data"].([]any)[0].(map[string]any)["status"] != "processed" {
+		t.Fatalf("events: %s", r.Raw)
+	}
+}
+
+func TestStorageAvatarAttachmentsAndBranding(t *testing.T) {
+	e := setup(t)
+	if e.f == nil || os.Getenv("TEST_MINIO_ENDPOINT") == "" {
+		t.Skip("TEST_MINIO_ENDPOINT not set")
+	}
+	e.seedUser("admin@test.local", all...)
+	admin, _ := e.login("admin@test.local")
+	png := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0}
+
+	r := e.upload("/account/avatar", "file", "avatar.png", png, admin)
+	expect(t, r, 201)
+	if !strings.Contains(r.data()["avatarUrl"].(string), "/avatars/public/") {
+		t.Fatalf("avatar: %s", r.Raw)
+	}
+	expect(t, e.upload("/account/avatar", "file", "x.svg", []byte("<svg/>"), admin), 400, "INVALID_AVATAR")
+
+	r = e.upload("/attachments", "file", "note.txt", []byte("private"), admin)
+	expect(t, r, 201)
+	attID := r.data()["id"].(string)
+	if !strings.Contains(r.data()["url"].(string), "X-Amz-Signature") {
+		t.Fatalf("attachment URL is not signed: %s", r.Raw)
+	}
+	expect(t, e.do("DELETE", "/attachments/"+attID, nil, bearer(admin)), 204)
+
+	// Settings and announcement images use magic-byte detection and public URLs.
+	r = e.upload("/settings/image", "image", "logo.png", png, admin)
+	expect(t, r, 201)
+	if !strings.Contains(r.data()["url"].(string), "/branding/public/") {
+		t.Fatalf("branding: %s", r.Raw)
+	}
+	r = e.upload("/announcements/image", "image", "cover.png", png, admin)
+	expect(t, r, 201)
+	if !strings.Contains(r.data()["url"].(string), "/announcements/public/") {
+		t.Fatalf("announcement image: %s", r.Raw)
+	}
+}
+
+func TestMetricsAndCleanup(t *testing.T) {
+	e := setup(t)
+	e.seedUser("admin@test.local", all...)
+	admin, _ := e.login("admin@test.local")
+
+	r := e.do("GET", "/metrics", nil)
+	expect(t, r, 200)
+	if !strings.Contains(string(r.Raw), "go_goroutines") || !strings.Contains(r.Header.Get("Content-Type"), "text/plain") {
+		t.Fatalf("metrics: %s", r.Raw)
+	}
+	// Expired/used token rows are removed by the manual cleanup endpoint.
+	_, err := e.pool.Exec(context.Background(), `INSERT INTO user_token(id,user_id,purpose,channel,token_hash,expires_at,used_at) SELECT $1,id,'x','web',$2,now()-interval '100 days',now() FROM "user" LIMIT 1`, app.NewID(), auth.RandomToken(32))
+	must(t, err)
+	r = e.do("POST", "/system/maintenance/cleanup", nil, bearer(admin))
+	expect(t, r, 201)
+	if r.data()["ran"] != true || r.data()["deleted"].(map[string]any)["userTokens"].(float64) < 1 {
+		t.Fatalf("cleanup: %s", r.Raw)
+	}
 }

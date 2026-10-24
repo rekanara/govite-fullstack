@@ -49,16 +49,3 @@ WHERE id = $1 AND user_id = $2 RETURNING *;
 
 -- name: MarkAllNotificationsRead :exec
 UPDATE notification SET read_at = now() WHERE user_id = $1 AND read_at IS NULL;
-
--- name: ListPublishedAnnouncements :many
-SELECT sqlc.embed(a), COALESCE(u.full_name, u.email)::text AS author_name
-FROM announcement a JOIN "user" u ON u.id = a.author_id
-WHERE a.status = 'published'
-ORDER BY a.is_pinned DESC, a.published_at DESC NULLS FIRST, a.created_at DESC, a.id DESC
-LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
-
--- name: CountPublishedAnnouncements :one
-SELECT count(*) FROM announcement WHERE status = 'published';
-
--- name: ListAttachments :many
-SELECT * FROM attachment WHERE owner_user_id = $1 ORDER BY created_at DESC;
