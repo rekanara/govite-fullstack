@@ -54,8 +54,10 @@ ON CONFLICT (resource, action) DO NOTHING;
 DELETE FROM permission WHERE NOT (resource || '.' || action = ANY(@keys::text[]));
 
 -- name: UpsertSystemRole :exec
-INSERT INTO role (id, name, description, is_system, require_two_factor) VALUES ($1, $2, $3, true, true)
-ON CONFLICT (id) DO UPDATE SET is_system = true, require_two_factor = true;
+-- 2FA starts off so a fresh install (and scripts/smoke.sh) can sign in; an
+-- admin turns it on per role, and re-seeding keeps that choice.
+INSERT INTO role (id, name, description, is_system, require_two_factor) VALUES ($1, $2, $3, true, false)
+ON CONFLICT (id) DO UPDATE SET is_system = true;
 
 -- name: UpsertRolePermission :exec
 INSERT INTO role_permission (id, role_id, resource, action, scope) VALUES ($1, $2, $3, $4, $5)

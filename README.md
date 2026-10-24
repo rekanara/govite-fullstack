@@ -34,7 +34,7 @@ cd fe && pnpm dev     # admin                 → http://localhost:5173
 ```
 
 Vite proxies `/api` to `:3000`, so the browser sees one origin (no CORS, refresh cookie just works).
-Super Admin requires 2FA: the first login shows a QR code.
+Super Admin starts without required 2FA; turn it on per role in Roles (the next login shows a QR code). Re-running `make seed` keeps that choice.
 Outside production, Swagger UI is at `/api/docs`; raw OpenAPI is at `/api/docs-json` and `/api/docs-yaml`.
 
 ## Verification
@@ -43,7 +43,7 @@ Outside production, Swagger UI is at `/api/docs`; raw OpenAPI is at `/api/docs-j
 cd be && make lint test
 docker compose up -d postgres_test && make test-e2e
 cd fe && pnpm lint && pnpm typecheck && pnpm test && pnpm build
-API_BASE_URL=http://localhost:3000/api/v1 scripts/smoke.sh   # needs a user without 2FA
+API_BASE_URL=http://localhost:3000/api/v1 scripts/smoke.sh   # SUPER_ADMIN_* must not require 2FA
 ```
 
 ## Adding a frontend (e.g. SEO landing)

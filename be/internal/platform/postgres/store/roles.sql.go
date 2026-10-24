@@ -348,8 +348,8 @@ func (q *Queries) UpsertSuperAdmin(ctx context.Context, arg UpsertSuperAdminPara
 }
 
 const upsertSystemRole = `-- name: UpsertSystemRole :exec
-INSERT INTO role (id, name, description, is_system, require_two_factor) VALUES ($1, $2, $3, true, true)
-ON CONFLICT (id) DO UPDATE SET is_system = true, require_two_factor = true
+INSERT INTO role (id, name, description, is_system, require_two_factor) VALUES ($1, $2, $3, true, false)
+ON CONFLICT (id) DO UPDATE SET is_system = true
 `
 
 type UpsertSystemRoleParams struct {
@@ -358,6 +358,8 @@ type UpsertSystemRoleParams struct {
 	Description *string
 }
 
+// 2FA starts off so a fresh install (and scripts/smoke.sh) can sign in; an
+// admin turns it on per role, and re-seeding keeps that choice.
 func (q *Queries) UpsertSystemRole(ctx context.Context, arg UpsertSystemRoleParams) error {
 	_, err := q.db.Exec(ctx, upsertSystemRole, arg.ID, arg.Name, arg.Description)
 	return err
