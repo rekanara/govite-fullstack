@@ -13,7 +13,8 @@ import {
 } from "@app/ui/components/card"
 import { Input } from "@app/ui/components/input"
 import { Label } from "@app/ui/components/label"
-import { PageHeader, RequirePermission } from "@/components/page"
+import { PageHeader } from "@/components/page"
+import { RequirePermission } from "@/features/auth/require-permission"
 import { settingsApi } from "@/features/settings/api"
 
 export function SettingsPage() {

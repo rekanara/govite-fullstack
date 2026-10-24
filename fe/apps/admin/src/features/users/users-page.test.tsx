@@ -18,6 +18,8 @@ vi.mock("@/components/page", () => ({
       {actions}
     </header>
   ),
+}))
+vi.mock("@/features/auth/require-permission", () => ({
   RequirePermission: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
   ),

@@ -22,7 +22,7 @@ import {
   DetailSection,
   StatusBadge,
 } from "@/components/detail-layout"
-import { RequirePermission } from "@/components/page"
+import { RequirePermission } from "@/features/auth/require-permission"
 import { rolesApi } from "@/features/roles/api"
 import { usersApi } from "@/features/users/api"
 import { UserActivity } from "@/features/audit/user-activity"

@@ -22,7 +22,7 @@ import {
   DetailHero,
   DetailSection,
 } from "@/components/detail-layout"
-import { RequirePermission } from "@/components/page"
+import { RequirePermission } from "@/features/auth/require-permission"
 import { permissionsApi, rolesApi } from "@/features/roles/api"
 
 const signature = (permissions: RolePermission[]) =>

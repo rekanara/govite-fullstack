@@ -33,14 +33,15 @@ import {
 } from "@app/ui/components/table"
 import {
   Pagination,
-  saveDownload,
   SortableHead,
   TableState,
-  useDebounced,
   type SortState,
 } from "@/components/list-controls"
+import { saveDownload } from "@/lib/download"
+import { useDebounced } from "@/lib/use-debounced"
 import { ConfirmAction } from "@/components/confirm-action"
-import { PageHeader, RequirePermission } from "@/components/page"
+import { PageHeader } from "@/components/page"
+import { RequirePermission } from "@/features/auth/require-permission"
 import { rolesApi } from "@/features/roles/api"
 import { usersApi, type UserListParams } from "@/features/users/api"
 import { UserImportDialog } from "@/features/users/user-import-dialog"

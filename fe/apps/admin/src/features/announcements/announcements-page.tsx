@@ -39,9 +39,10 @@ import { ConfirmAction } from "@/components/confirm-action"
 import {
   Pagination,
   TableState,
-  useDebounced,
 } from "@/components/list-controls"
-import { PageHeader, RequirePermission } from "@/components/page"
+import { useDebounced } from "@/lib/use-debounced"
+import { PageHeader } from "@/components/page"
+import { RequirePermission } from "@/features/auth/require-permission"
 import { announcementsApi } from "@/features/announcements/api"
 
 const ANY = "any"

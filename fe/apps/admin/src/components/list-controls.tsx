@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react"
 import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from "lucide-react"
 import { Button } from "@app/ui/components/button"
 import {
@@ -12,15 +11,6 @@ import { Skeleton } from "@app/ui/components/skeleton"
 import { TableCell, TableHead, TableRow } from "@app/ui/components/table"
 
 export const PAGE_SIZES = [10, 20, 50, 100] as const
-
-export function saveDownload(blob: Blob, filename: string | null) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url
-  a.download = filename ?? "download"
-  a.click()
-  URL.revokeObjectURL(url)
-}
 
 export interface SortState<K extends string> {
   sort: K
@@ -67,15 +57,6 @@ export function SortableHead<K extends string>({
       </Button>
     </TableHead>
   )
-}
-
-export function useDebounced<T>(value: T, ms = 300): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), ms)
-    return () => clearTimeout(t)
-  }, [value, ms])
-  return debounced
 }
 
 export function ListState({

@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@app/ui/components/table"
-import { saveDownload } from "@/components/list-controls"
+import { saveDownload } from "@/lib/download"
 import { usersApi } from "@/features/users/api"
 
 export function UserImportDialog() {
