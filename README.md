@@ -34,6 +34,7 @@ cd fe && pnpm dev     # admin                 → http://localhost:5173
 ```
 
 Vite proxies `/api` to `:3000`, so the browser sees one origin (no CORS, refresh cookie just works).
+Sign in with `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` from `be/.env` (the example values are public: change them before exposing the app).
 Super Admin starts without required 2FA; turn it on per role in Roles (the next login shows a QR code). Re-running `make seed` keeps that choice.
 Outside production, Swagger UI is at `/api/docs`; raw OpenAPI is at `/api/docs-json` and `/api/docs-yaml`.
 
@@ -63,4 +64,10 @@ Add `"@app/ui": "workspace:*"` (and `@astrojs/react` for React islands), import 
 - Behind a reverse proxy set `TRUST_PROXY=true` so rate limits see the client IP.
 - Set `REDIS_URL` when running more than one API instance (shared rate limits, permission cache).
 - Run `api migrate` before serving traffic; `api seed` after changing the permission catalog.
+- Replace every placeholder from `.env.example` (`JWT_ACCESS_SECRET`, `REFRESH_TOKEN_PEPPER`, `SUPER_ADMIN_PASSWORD`, MinIO keys). With `APP_ENV=production` the API refuses to boot while the JWT secret or pepper still contains `change-me`.
+- Turn on required 2FA for the Super Admin role after the first sign-in.
 - Optional production stack: `docker-compose.prod.yml` serves the SPA and proxies `/api` to the API.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

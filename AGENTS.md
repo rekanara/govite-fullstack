@@ -1,6 +1,6 @@
 # govite-fullstack
 
-Go port of `~/Documents/Dev/private/Rekanara/codebase/monorepo-fullstack` (NestJS). HTTP contract (paths, envelope, cookies, error codes) is kept identical so the admin app works unchanged; check the Nest repo for behaviour questions.
+Go port of a NestJS starter (monorepo-fullstack). HTTP contract (paths, envelope, cookies, error codes) is kept identical so the admin app works unchanged.
 
 ## Layout
 
@@ -32,7 +32,7 @@ Go port of `~/Documents/Dev/private/Rekanara/codebase/monorepo-fullstack` (NestJ
 
 ## Frontend rules
 
-- Copied from the Nest repo's web app; see its AGENTS.md for routing/auth conventions. API base defaults to `/api/v1` (Vite proxy in dev).
+- Admin app: TanStack Router file routes in `src/routes` (thin wiring), pages and API clients in `src/features/<name>`. API base defaults to `/api/v1` (Vite proxy in dev).
 - shadcn: `pnpm dlx shadcn@latest add <name> -c apps/admin` from `fe/`; primitives land in `packages/ui`.
 - `apps/admin/src/routeTree.gen.ts` is generated; run `pnpm --filter admin exec vite build` after route changes before typecheck.
 - New app (e.g. Astro landing): `apps/<name>`, depend on `@app/ui` / `@app/contracts`.

@@ -120,6 +120,15 @@ func Load() (Config, error) {
 	if len(c.RefreshPepper) > 0 && len(c.RefreshPepper) < 16 {
 		errs = append(errs, "REFRESH_TOKEN_PEPPER must be at least 16 chars")
 	}
+	// The repo is public, so the placeholders in .env.example are known to
+	// everyone: a production boot with them would let anyone forge tokens.
+	if c.Production() {
+		for key, v := range map[string]string{"JWT_ACCESS_SECRET": c.JWTSecret, "REFRESH_TOKEN_PEPPER": c.RefreshPepper} {
+			if strings.Contains(strings.ToLower(v), "change-me") {
+				errs = append(errs, key+" still has the .env.example placeholder")
+			}
+		}
+	}
 	if _, err := mail.ParseAddress(c.SMTPFrom); err != nil {
 		errs = append(errs, "SMTP_FROM must be an email")
 	}
